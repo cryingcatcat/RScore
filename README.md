@@ -1,5 +1,5 @@
 # RScore
-## 🖼️ 效果示例 (Screenshots)
+## 🖼️ 效果示例
 
 ![示例图1：对单个好友的数据分析](examples/example_1.png)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 🚀 快速开始 (Quick Start)
+## 🚀 快速开始
 
 ### 步骤 1: 准备数据
 
