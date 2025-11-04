@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Card, Select, Button, Spin, message, Row, Col, Statistic, Tag, Timeline, Table, Progress, Tabs } from 'antd';
-import { UserOutlined, MessageOutlined, CalendarOutlined, TrophyOutlined, HeartOutlined, TeamOutlined, ExportOutlined, SyncOutlined } from '@ant-design/icons';
+import { Layout, Card, Select, Button, Spin, message, Row, Col, Statistic, Tag, Timeline, Table, Progress, Tabs, Alert, List } from 'antd';
+import { UserOutlined, MessageOutlined, CalendarOutlined, TrophyOutlined, HeartOutlined, TeamOutlined, ExportOutlined, SyncOutlined, FireOutlined, LineChartOutlined, HeartTwoTone, RadarChartOutlined, DashboardOutlined, ShareAltOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import 'antd/dist/reset.css';
 import './App.css';
 
-// 在文件顶部添加配置
-const IS_TEST_MODE = false;  // 测试时设为true，正式使用时设为false
-const BATCH_LIMIT = IS_TEST_MODE ? 30 : 0;  // 0表示全部
-
 const { Header, Content } = Layout;
 const { Option } = Select;
 const { TabPane } = Tabs;
 
 const API_BASE_URL = 'http://localhost:8000';
+
+// 配置：测试模式
+const IS_TEST_MODE = true;  // 测试时设为true，正式使用时设为false
+const BATCH_LIMIT = IS_TEST_MODE ? 30 : 0;  // 0表示全部
 
 function App() {
   const [contacts, setContacts] = useState([]);
@@ -24,7 +24,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [batchAnalysis, setBatchAnalysis] = useState(null);
   const [userPreference, setUserPreference] = useState(null);
-  const [loadingPreference, setLoadingPreference] = useState(false);
+  const [timeAnalysis, setTimeAnalysis] = useState(null);
+  const [socialHealth, setSocialHealth] = useState(null);
+  const [networkGraph, setNetworkGraph] = useState(null);
 
   // 获取联系人列表
   useEffect(() => {
@@ -57,9 +59,7 @@ function App() {
     }
   };
 
-  // 批量分析 - 现在一次调用获取所有数据
-  // 保持原有的 runBatchAnalysis 函数不变
-  // runBatchAnalysis 保持原样
+  // 批量分析
   const runBatchAnalysis = async () => {
     setLoading(true);
     try {
@@ -67,8 +67,21 @@ function App() {
       
       setBatchAnalysis(response.data);
       
+      // 提取各项分析结果
       if (response.data.user_preference) {
         setUserPreference(response.data.user_preference);
+      }
+      
+      if (response.data.time_analysis) {
+        setTimeAnalysis(response.data.time_analysis);
+      }
+      
+      if (response.data.social_health) {
+        setSocialHealth(response.data.social_health);
+      }
+      
+      if (response.data.network_graph) {
+        setNetworkGraph(response.data.network_graph);
       }
       
       const successMsg = BATCH_LIMIT > 0 
@@ -81,31 +94,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  // // 获取用户偏好分析
-  // const fetchUserPreference = async () => {
-  //   setLoadingPreference(true);
-  //   try {
-  //     const response = await axios.get(`${API_BASE_URL}/api/user_preference_analysis`);
-  //     setUserPreference(response.data);
-  //   } catch (error) {
-  //     console.error('获取用户偏好失败', error);
-  //   } finally {
-  //     setLoadingPreference(false);
-  //   }
-  // };
-
-
-// 在按钮区域，你可以选择性地显示测试按钮
-<Button
-  icon={<TeamOutlined />}
-  onClick={runBatchAnalysis}  // 原有功能保持不变
-  loading={loading}
-  style={{ marginRight: 8 }}
->
-  批量分析
-</Button>
-
 
   // 导出报告
   const exportReport = async () => {
@@ -130,7 +118,382 @@ function App() {
     }
   };
 
-  // 雷达图配置
+  // 关系网络图配置
+  const getNetworkGraphOption = () => {
+    if (!networkGraph) return {};
+    
+    return {
+      title: {
+        text: '社交关系网络图',
+        left: 'center',
+        top: 10,
+        textStyle: {
+          fontSize: 16
+        }
+      },
+      tooltip: {
+        formatter: function(params) {
+          if (params.dataType === 'node') {
+            return params.data.name + '<br/>评分: ' + (params.data.value || 0).toFixed(2);
+          } else {
+            return '关系强度: ' + params.data.value.toFixed(2);
+          }
+        }
+      },
+      legend: [{
+        data: networkGraph.categories.map(c => c.name),
+        orient: 'horizontal',
+        left: 'center',
+        top: 40
+      }],
+      animationDuration: 1500,
+      animationEasingUpdate: 'quinticInOut',
+      series: [{
+        type: 'graph',
+        layout: 'force',
+        data: networkGraph.nodes,
+        links: networkGraph.edges,
+        categories: networkGraph.categories,
+        roam: true,
+        draggable: true,
+        force: {
+          repulsion: 200,
+          gravity: 0.1,
+          edgeLength: 100,
+          layoutAnimation: true
+        },
+        label: {
+          show: true,
+          position: 'bottom',
+          formatter: '{b}',
+          fontSize: 10
+        },
+        lineStyle: {
+          color: 'source',
+          curveness: 0.3
+        },
+        emphasis: {
+          focus: 'adjacency',
+          lineStyle: {
+            width: 10
+          }
+        }
+      }]
+    };
+  };
+
+  // 社交健康度仪表盘配置
+  const getHealthGaugeOption = (value, title) => {
+    let color = '#52c41a';
+    if (value < 40) color = '#f5222d';
+    else if (value < 60) color = '#faad14';
+    else if (value < 80) color = '#1890ff';
+    
+    return {
+      series: [{
+        type: 'gauge',
+        startAngle: 180,
+        endAngle: 0,
+        min: 0,
+        max: 100,
+        radius: '100%',
+        splitNumber: 8,
+        axisLine: {
+          lineStyle: {
+            width: 6,
+            color: [
+              [0.4, '#f5222d'],
+              [0.6, '#faad14'],
+              [0.8, '#1890ff'],
+              [1, '#52c41a']
+            ]
+          }
+        },
+        pointer: {
+          icon: 'path://M12.8,0.7l2.9,4.6l5.4,0.8l-3.9,3.8l0.9,5.4l-4.8-2.5l-4.8,2.5l0.9-5.4l-3.9-3.8l5.4-0.8L12.8,0.7z',
+          length: '70%',
+          width: 3,
+          offsetCenter: [0, '-10%'],
+          itemStyle: {
+            color: color
+          }
+        },
+        axisLabel: {
+          fontSize: 10,
+          distance: -50,
+          color: '#999'
+        },
+        axisTick: {
+          length: 8,
+          lineStyle: {
+            color: 'auto',
+            width: 1
+          }
+        },
+        splitLine: {
+          length: 10,
+          lineStyle: {
+            color: 'auto',
+            width: 2
+          }
+        },
+        title: {
+          show: true,
+          offsetCenter: [0, '30%'],
+          fontSize: 12,
+          color: '#666'
+        },
+        detail: {
+          fontSize: 20,
+          offsetCenter: [0, '0%'],
+          color: color,
+          formatter: '{value}'
+        },
+        data: [{
+          value: value,
+          name: title
+        }]
+      }]
+    };
+  };
+
+  // 社交活跃时间热力图配置
+  const getHeatmapOption = () => {
+    if (!timeAnalysis?.heatmap) return {};
+    
+    const hours = Array.from({length: 24}, (_, i) => `${i}:00`);
+    const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+    
+    const data = timeAnalysis.heatmap.map(item => [item.hour, item.weekday, item.value || 0]);
+    const maxValue = Math.max(...data.map(item => item[2]), 1);
+    
+    return {
+      title: {
+        text: '社交活跃时间热力图',
+        left: 'center',
+        top: 10,
+        textStyle: {
+          fontSize: 16
+        }
+      },
+      tooltip: {
+        position: 'top',
+        formatter: function (params) {
+          return `${days[params.value[1]]} ${params.value[0]}:00<br/>消息数: ${params.value[2]}`;
+        }
+      },
+      grid: {
+        height: '60%',
+        top: '15%'
+      },
+      xAxis: {
+        type: 'category',
+        data: hours,
+        splitArea: {
+          show: true
+        },
+        axisLabel: {
+          interval: 2,
+          fontSize: 10
+        }
+      },
+      yAxis: {
+        type: 'category',
+        data: days,
+        splitArea: {
+          show: true
+        }
+      },
+      visualMap: {
+        min: 0,
+        max: maxValue,
+        calculable: true,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: '5%',
+        inRange: {
+          color: ['#f0f0f0', '#ffe4b5', '#ffa500', '#ff6347', '#dc143c', '#8b0000']
+        }
+      },
+      series: [{
+        name: '消息数',
+        type: 'heatmap',
+        data: data,
+        label: {
+          show: false
+        },
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowColor: 'rgba(0, 0, 0, 0.5)'
+          }
+        }
+      }]
+    };
+  };
+
+  // 月度趋势图配置
+  const getMonthlyTrendOption = () => {
+    if (!timeAnalysis?.monthly_trend) return {};
+    
+    const trend = timeAnalysis.monthly_trend;
+    const growth = timeAnalysis.monthly_growth || [];
+    
+    const growthData = [null, ...growth.map(item => item.growth)];
+    
+    return {
+      title: {
+        text: '月度消息趋势分析',
+        left: 'center',
+        top: 10,
+        textStyle: {
+          fontSize: 16
+        }
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: {
+          type: 'cross',
+          crossStyle: {
+            color: '#999'
+          }
+        },
+        formatter: function(params) {
+          let result = params[0].name + '<br/>';
+          params.forEach(param => {
+            if (param.value !== null && param.value !== undefined) {
+              result += param.seriesName + ': ' + param.value + 
+                       (param.seriesIndex === 1 ? '%' : '') + '<br/>';
+            }
+          });
+          return result;
+        }
+      },
+      legend: {
+        data: ['消息数', '环比增长'],
+        top: 35
+      },
+      grid: {
+        top: 70,
+        bottom: 50
+      },
+      xAxis: [
+        {
+          type: 'category',
+          data: trend.map(item => item.month),
+          axisPointer: {
+            type: 'shadow'
+          },
+          axisLabel: {
+            rotate: 45,
+            interval: 0,
+            fontSize: 10
+          }
+        }
+      ],
+      yAxis: [
+        {
+          type: 'value',
+          name: '消息数',
+          min: 0,
+          axisLabel: {
+            formatter: '{value}'
+          }
+        },
+        {
+          type: 'value',
+          name: '环比增长率',
+          axisLabel: {
+            formatter: '{value}%'
+          }
+        }
+      ],
+      series: [
+        {
+          name: '消息数',
+          type: 'bar',
+          data: trend.map(item => item.count),
+          itemStyle: {
+            color: '#1890ff'
+          },
+          label: {
+            show: true,
+            position: 'top',
+            fontSize: 10
+          }
+        },
+        {
+          name: '环比增长',
+          type: 'line',
+          yAxisIndex: 1,
+          data: growthData,
+          itemStyle: {
+            color: '#52c41a'
+          },
+          smooth: true,
+          connectNulls: false,
+          markLine: {
+            data: [
+              { type: 'average', name: '平均增长率' }
+            ]
+          }
+        }
+      ]
+    };
+  };
+
+  // 年度对比图配置
+  const getYearlyComparisonOption = () => {
+    if (!timeAnalysis?.yearly_summary) return {};
+    
+    const yearData = Object.entries(timeAnalysis.yearly_summary).map(([year, count]) => ({
+      year: year,
+      count: count
+    })).sort((a, b) => a.year - b.year);
+    
+    if (yearData.length === 0) return {};
+    
+    return {
+      title: {
+        text: '年度社交活跃度对比',
+        left: 'center',
+        textStyle: {
+          fontSize: 16
+        }
+      },
+      tooltip: {
+        trigger: 'axis',
+        formatter: '{b}年<br/>消息总数: {c}'
+      },
+      xAxis: {
+        type: 'category',
+        data: yearData.map(item => item.year),
+        axisLabel: {
+          interval: 0
+        }
+      },
+      yAxis: {
+        type: 'value',
+        name: '消息总数'
+      },
+      series: [{
+        type: 'bar',
+        data: yearData.map(item => item.count),
+        itemStyle: {
+          color: function(params) {
+            const colors = ['#91d5ff', '#69c0ff', '#40a9ff', '#1890ff', '#096dd9'];
+            return colors[params.dataIndex % colors.length];
+          }
+        },
+        label: {
+          show: true,
+          position: 'top'
+        }
+      }]
+    };
+  };
+
+  // 其他图表配置保持不变...
   const getRadarOption = () => {
     if (!scoreData) return {};
     
@@ -186,7 +549,6 @@ function App() {
     };
   };
 
-  // 分数分布图表配置
   const getDistributionOption = () => {
     if (!batchAnalysis?.statistics?.score_distribution) return {};
     
@@ -235,70 +597,66 @@ function App() {
     };
   };
 
-  // 用户偏好雷达图
-  // 用户偏好雷达图
-const getUserPreferenceOption = () => {
-  if (!userPreference?.preferences) return {};
-  
-  const prefs = userPreference.preferences;
-  
-  return {
-    title: {
-      text: '社交偏好分析',
-      left: 'center',
-      top: 5,  // 标题位置上移
-      textStyle: {
-        fontSize: 14  // 稍微减小字体
-      },
-      subtext: userPreference.description,
-      subtextStyle: {
-        fontSize: 12,  // 副标题字体也减小
-        padding: [5, 0, 0, 0]  // 调整副标题间距
-      }
-    },
-    tooltip: {},
-    radar: {
-      center: ['50%', '60%'],  // 雷达图中心下移，给标题留出空间
-      radius: '60%',  // 稍微缩小雷达图
-      indicator: [
-        { name: '互动频率', max: 10 },
-        { name: '内容质量', max: 10 },
-        { name: '情感表达', max: 10 },
-        { name: '深度交流', max: 10 }
-      ],
-      name: {
+  const getUserPreferenceOption = () => {
+    if (!userPreference?.preferences) return {};
+    
+    const prefs = userPreference.preferences;
+    
+    return {
+      title: {
+        text: '社交偏好分析',
+        left: 'center',
+        top: 5,
         textStyle: {
-          fontSize: 11,  // 指标名称字体大小
-          color: '#333'
-        }
-      }
-    },
-    series: [{
-      type: 'radar',
-      data: [{
-        value: [
-          prefs.interaction?.average || 0,
-          prefs.content?.average || 0,
-          prefs.emotion?.average || 0,
-          prefs.depth?.average || 0
-        ],
-        name: '平均水平',
-        areaStyle: {
-          color: 'rgba(255, 100, 100, 0.3)'
+          fontSize: 14
         },
-        lineStyle: {
-          color: '#ff6464'
+        subtext: userPreference.description,
+        subtextStyle: {
+          fontSize: 12,
+          padding: [5, 0, 0, 0]
         }
+      },
+      tooltip: {},
+      radar: {
+        center: ['50%', '60%'],
+        radius: '60%',
+        indicator: [
+          { name: '互动频率', max: 10 },
+          { name: '内容质量', max: 10 },
+          { name: '情感表达', max: 10 },
+          { name: '深度交流', max: 10 }
+        ],
+        name: {
+          textStyle: {
+            fontSize: 11,
+            color: '#333'
+          }
+        }
+      },
+      series: [{
+        type: 'radar',
+        data: [{
+          value: [
+            prefs.interaction?.average || 0,
+            prefs.content?.average || 0,
+            prefs.emotion?.average || 0,
+            prefs.depth?.average || 0
+          ],
+          name: '平均水平',
+          areaStyle: {
+            color: 'rgba(255, 100, 100, 0.3)'
+          },
+          lineStyle: {
+            color: '#ff6464'
+          }
+        }]
       }]
-    }]
+    };
   };
-};
 
-  // 时间线图表配置（模拟数据）
   const getTimelineOption = () => {
     if (!scoreData) return {};
     
-    // 模拟历史数据，实际应从后端获取
     const months = ['6月前', '5月前', '4月前', '3月前', '2月前', '1月前', '现在'];
     const baseScore = scoreData.total_score;
     const data = [
@@ -362,7 +720,6 @@ const getUserPreferenceOption = () => {
     return { level: '疏远', color: '#f5222d' };
   };
 
-  // 获取关系状态标签颜色
   const getStatusColor = (status) => {
     const colors = {
       '活跃': 'green',
@@ -371,6 +728,23 @@ const getUserPreferenceOption = () => {
       '失联': 'red'
     };
     return colors[status] || 'default';
+  };
+
+  const getHealthColor = (value) => {
+    if (value >= 80) return '#52c41a';
+    if (value >= 60) return '#1890ff';
+    if (value >= 40) return '#faad14';
+    return '#f5222d';
+  };
+
+  const getHealthIcon = (level) => {
+    const icons = {
+      '优秀': '🌟',
+      '良好': '😊',
+      '一般': '😐',
+      '待改善': '😟'
+    };
+    return icons[level] || '❓';
   };
 
   return (
@@ -440,10 +814,9 @@ const getUserPreferenceOption = () => {
           </div>
         )}
 
-        {/* 评分结果展示 */}
+        {/* 评分结果展示 - 保持不变 */}
         {scoreData && !loading && (
           <>
-            {/* 总分卡片 */}
             <Row gutter={16} style={{ marginBottom: 24 }}>
               <Col span={6}>
                 <Card>
@@ -547,62 +920,6 @@ const getUserPreferenceOption = () => {
                   </Col>
                 </Row>
               </TabPane>
-
-              <TabPane tab="关系趋势" key="2">
-                <Card>
-                  <ReactECharts option={getTimelineOption()} style={{ height: 350 }} />
-                </Card>
-              </TabPane>
-
-              <TabPane tab="里程碑" key="3">
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Card title="关系里程碑">
-                      <Timeline>
-                        {scoreData.milestones.map((milestone, index) => (
-                          <Timeline.Item key={index} color="blue">
-                            <p><strong>{milestone.description}</strong></p>
-                            {milestone.date && <p>日期：{milestone.date}</p>}
-                            <p style={{ color: '#666' }}>{milestone.content}</p>
-                          </Timeline.Item>
-                        ))}
-                      </Timeline>
-                    </Card>
-                  </Col>
-                  <Col span={12}>
-                    <Card title="统计信息">
-                      <table style={{ width: '100%' }}>
-                        <tbody>
-                          <tr>
-                            <td style={{ padding: '8px 0' }}>首次聊天：</td>
-                            <td>{scoreData.statistics.first_chat_date}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: '8px 0' }}>最近聊天：</td>
-                            <td>{scoreData.statistics.last_chat_date}</td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: '8px 0' }}>持续天数：</td>
-                            <td>{scoreData.statistics.total_days} 天</td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: '8px 0' }}>我发送的消息：</td>
-                            <td>{scoreData.statistics.sent_messages} 条</td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: '8px 0' }}>对方发送的消息：</td>
-                            <td>{scoreData.statistics.received_messages} 条</td>
-                          </tr>
-                          <tr>
-                            <td style={{ padding: '8px 0' }}>日均消息：</td>
-                            <td>{scoreData.details.interaction?.daily_messages?.toFixed(2) || 0} 条</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </Card>
-                  </Col>
-                </Row>
-              </TabPane>
             </Tabs>
           </>
         )}
@@ -610,149 +927,327 @@ const getUserPreferenceOption = () => {
         {/* 批量分析结果 */}
         {batchAnalysis && (
           <>
-            {/* 数据洞察面板 */}
-            <Card title="数据洞察" style={{ marginBottom: 24 }}>
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Card>
-                    <ReactECharts option={getDistributionOption()} style={{ height: 250 }} />
-                  </Card>
-                </Col>
-                <Col span={8}>
-                  <Card>
-                    <ReactECharts option={getUserPreferenceOption()} style={{ height: 250 }} />
-                  </Card>
-                </Col>
-                <Col span={8}>
-                  <Card title="关系分类">
-                    {batchAnalysis.categories?.summary && Object.entries(batchAnalysis.categories.summary).map(([type, count]) => (
-                      <div key={type} style={{ marginBottom: 12 }}>
-                        <span style={{ width: 60, display: 'inline-block' }}>{type}：</span>
-                        <Progress 
-                          percent={Math.round(count / batchAnalysis.total_analyzed * 100)}
-                          strokeColor={
-                            type === '密友圈' ? '#52c41a' :
-                            type === '社交圈' ? '#1890ff' :
-                            type === '工作圈' ? '#faad14' : '#d9d9d9'
-                          }
-                          format={() => `${count}人`}
+            <Tabs defaultActiveKey="1">
+              {/* 健康仪表盘 - 新增为第一个标签页 */}
+              <TabPane tab={<span><DashboardOutlined />社交健康度</span>} key="1">
+                {socialHealth && (
+                  <>
+                    <Row gutter={16} style={{ marginBottom: 24 }}>
+                      <Col span={8}>
+                        <Card title={
+                          <span>
+                            综合健康度 
+                            <span style={{ marginLeft: 10, fontSize: 20 }}>
+                              {getHealthIcon(socialHealth.health_level)}
+                            </span>
+                          </span>
+                        }>
+                          <ReactECharts 
+                            option={getHealthGaugeOption(socialHealth.overall_health, '综合评分')} 
+                            style={{ height: 200 }} 
+                          />
+                          <div style={{ textAlign: 'center', marginTop: 10 }}>
+                            <Tag color={getHealthColor(socialHealth.overall_health)} style={{ fontSize: 16 }}>
+                              {socialHealth.health_level}
+                            </Tag>
+                          </div>
+                        </Card>
+                      </Col>
+                      
+                      <Col span={16}>
+                        <Card title="健康指标详情">
+                          <Row gutter={16}>
+                            <Col span={12}>
+                              <div style={{ marginBottom: 20 }}>
+                                <span>关系多样性</span>
+                                <Progress 
+                                  percent={socialHealth.diversity_index} 
+                                  strokeColor={getHealthColor(socialHealth.diversity_index)}
+                                  format={percent => `${percent.toFixed(1)}`}
+                                />
+                                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                                  社交关系的层次分布是否合理
+                                </div>
+                              </div>
+                              <div style={{ marginBottom: 20 }}>
+                                <span>社交平衡度</span>
+                                <Progress 
+                                  percent={socialHealth.balance_index}
+                                  strokeColor={getHealthColor(socialHealth.balance_index)}
+                                  format={percent => `${percent.toFixed(1)}`}
+                                />
+                                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                                  深度关系与泛社交的比例
+                                </div>
+                              </div>
+                            </Col>
+                            <Col span={12}>
+                              <div style={{ marginBottom: 20 }}>
+                                <span>关系维护指数</span>
+                                <Progress 
+                                  percent={socialHealth.maintenance_index}
+                                  strokeColor={getHealthColor(socialHealth.maintenance_index)}
+                                  format={percent => `${percent.toFixed(1)}`}
+                                />
+                                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                                  活跃关系的比例
+                                </div>
+                              </div>
+                              <div style={{ marginBottom: 20 }}>
+                                <span>情感表达指数</span>
+                                <Progress 
+                                  percent={socialHealth.emotional_index}
+                                  strokeColor={getHealthColor(socialHealth.emotional_index)}
+                                  format={percent => `${percent.toFixed(1)}`}
+                                />
+                                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+                                  情感交流的丰富程度
+                                </div>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+                      </Col>
+                    </Row>
+                    
+                    {socialHealth.suggestions && socialHealth.suggestions.length > 0 && (
+                      <Card title="健康建议" style={{ marginBottom: 24 }}>
+                        <List
+                          dataSource={socialHealth.suggestions}
+                          renderItem={item => (
+                            <List.Item>
+                              <HeartTwoTone twoToneColor="#ff6464" style={{ marginRight: 8 }} />
+                              {item}
+                            </List.Item>
+                          )}
                         />
-                      </div>
-                    ))}
-                  </Card>
-                </Col>
-              </Row>
-            </Card>
+                      </Card>
+                    )}
+                  </>
+                )}
+              </TabPane>
 
-            {/* 关系排行榜 */}
-            <Card title={`关系排行榜 (分析了 ${batchAnalysis.total_analyzed || 0} / ${batchAnalysis.total_contacts || 0} 位好友)`}>
-              <Row gutter={16} style={{ marginBottom: 16 }}>
-                <Col span={6}>
-                  <Statistic 
-                    title="平均分数" 
-                    value={batchAnalysis.statistics?.average_score || 0} 
-                    precision={2} 
-                  />
-                </Col>
-                <Col span={6}>
-                  <Statistic 
-                    title="中位数" 
-                    value={batchAnalysis.statistics?.median_score || 0} 
-                    precision={2} 
-                  />
-                </Col>
-                <Col span={6}>
-                  <Statistic 
-                    title="分析成功" 
-                    value={batchAnalysis.total_analyzed || 0} 
-                    suffix={`/ ${batchAnalysis.total_contacts || 0}`} 
-                  />
-                </Col>
-                <Col span={6}>
-                  <Statistic 
-                    title="分析失败" 
-                    value={batchAnalysis.failed_count || 0} 
-                  />
-                </Col>
-              </Row>
-              
-              <Table
-                dataSource={batchAnalysis.top_friends || []}
-                rowKey="user_name"
-                pagination={{ pageSize: 20 }}
-                columns={[
-                  {
-                    title: '排名',
-                    key: 'rank',
-                    render: (_, __, index) => index + 1,
-                    width: 80,
-                    fixed: 'left'
-                  },
-                  {
-                    title: '好友',
-                    dataIndex: 'display_name',
-                    key: 'display_name',
-                    ellipsis: true,
-                    render: (text) => text || '未知'
-                  },
-                  {
-                    title: '关系评分',
-                    dataIndex: 'score',
-                    key: 'score',
-                    sorter: (a, b) => a.score - b.score,
-                    render: score => (
-                      <span>
-                        <Progress
-                          percent={score * 10}
-                          size="small"
-                          format={() => score.toFixed(2)}
-                          strokeColor={getScoreLevel(score).color}
-                          style={{ width: 150 }}
+              {/* 关系网络图 - 新增 */}
+              <TabPane tab={<span><ShareAltOutlined />关系网络</span>} key="2">
+                {networkGraph && (
+                  <Card>
+                    <ReactECharts 
+                      option={getNetworkGraphOption()} 
+                      style={{ height: 600 }} 
+                    />
+                    <Alert
+                      message="提示"
+                      description="节点大小表示消息量，距离表示关系亲密度，颜色表示关系类型。可以拖拽节点调整位置。"
+                      type="info"
+                      showIcon
+                      style={{ marginTop: 16 }}
+                    />
+                  </Card>
+                )}
+              </TabPane>
+
+              {/* 数据洞察 */}
+              <TabPane tab={<span><RadarChartOutlined />数据洞察</span>} key="3">
+                <Card style={{ marginBottom: 24 }}>
+                  <Row gutter={16}>
+                    <Col span={8}>
+                      <Card>
+                        <ReactECharts option={getDistributionOption()} style={{ height: 250 }} />
+                      </Card>
+                    </Col>
+                    <Col span={8}>
+                      <Card>
+                        <ReactECharts option={getUserPreferenceOption()} style={{ height: 250 }} />
+                      </Card>
+                    </Col>
+                    <Col span={8}>
+                      <Card title="关系分类">
+                        {batchAnalysis.categories?.summary && Object.entries(batchAnalysis.categories.summary).map(([type, count]) => (
+                          <div key={type} style={{ marginBottom: 12 }}>
+                            <span style={{ width: 60, display: 'inline-block' }}>{type}：</span>
+                            <Progress 
+                              percent={Math.round(count / batchAnalysis.total_analyzed * 100)}
+                              strokeColor={
+                                type === '密友圈' ? '#52c41a' :
+                                type === '社交圈' ? '#1890ff' :
+                                type === '工作圈' ? '#faad14' : '#d9d9d9'
+                              }
+                              format={() => `${count}人`}
+                            />
+                          </div>
+                        ))}
+                      </Card>
+                    </Col>
+                  </Row>
+                </Card>
+              </TabPane>
+
+              {/* 时间分析 */}
+              <TabPane tab={<span><FireOutlined />时间分析</span>} key="4">
+                <Row gutter={16} style={{ marginBottom: 24 }}>
+                  <Col span={24}>
+                    <Card>
+                      <ReactECharts option={getHeatmapOption()} style={{ height: 400 }} />
+                    </Card>
+                  </Col>
+                </Row>
+                
+                {timeAnalysis && (
+                  <Row gutter={16} style={{ marginBottom: 24 }}>
+                    <Col span={8}>
+                      <Card title="社交习惯分析">
+                        <Statistic 
+                          title="最活跃时间" 
+                          value={`${timeAnalysis.peak_hour || 0}:00`}
+                          prefix={<FireOutlined />}
                         />
-                        <Tag color={getScoreLevel(score).color} style={{ marginLeft: 8 }}>
-                          {getScoreLevel(score).level}
-                        </Tag>
-                      </span>
-                    )
-                  },
-                  {
-                    title: '状态',
-                    dataIndex: 'relationship_status',
-                    key: 'relationship_status',
-                    render: (status) => (
-                      <Tag color={getStatusColor(status)}>
-                        {status || '未知'}
-                      </Tag>
-                    )
-                  },
-                  {
-                    title: '消息数',
-                    dataIndex: 'message_count',
-                    key: 'message_count',
-                    sorter: (a, b) => a.message_count - b.message_count,
-                    render: (count) => count || 0
-                  },
-                  {
-                    title: '聊天天数',
-                    dataIndex: 'days',
-                    key: 'days',
-                    sorter: (a, b) => (a.days || 0) - (b.days || 0),
-                    render: (days) => days ? `${days}天` : '-'
-                  },
-                  {
-                    title: '最后联系',
-                    dataIndex: 'last_chat',
-                    key: 'last_chat',
-                    sorter: (a, b) => {
-                      const dateA = a.last_chat ? new Date(a.last_chat) : new Date(0);
-                      const dateB = b.last_chat ? new Date(b.last_chat) : new Date(0);
-                      return dateA - dateB;
-                    },
-                    render: (date) => date || '-'
-                  }
-                ]}
-              />
-            </Card>
+                        <Statistic 
+                          title="最活跃星期" 
+                          value={timeAnalysis.peak_weekday || '未知'}
+                          style={{ marginTop: 16 }}
+                        />
+                        <Statistic 
+                          title="夜猫子指数" 
+                          value={timeAnalysis.night_owl_score || 0}
+                          suffix="%"
+                          style={{ marginTop: 16 }}
+                        />
+                        <div style={{ marginTop: 16, fontSize: 12, color: '#666' }}>
+                          * 夜猫子指数：0-6点消息占比
+                        </div>
+                      </Card>
+                    </Col>
+                    <Col span={16}>
+                      <Card>
+                        <ReactECharts option={getMonthlyTrendOption()} style={{ height: 300 }} />
+                      </Card>
+                    </Col>
+                  </Row>
+                )}
+                
+                {timeAnalysis?.yearly_summary && Object.keys(timeAnalysis.yearly_summary).length > 1 && (
+                  <Row gutter={16}>
+                    <Col span={24}>
+                      <Card>
+                        <ReactECharts option={getYearlyComparisonOption()} style={{ height: 300 }} />
+                      </Card>
+                    </Col>
+                  </Row>
+                )}
+              </TabPane>
+
+              {/* 关系排行榜 */}
+              <TabPane tab={<span><LineChartOutlined />关系排行榜</span>} key="5">
+                <Card title={`关系排行榜 (分析了 ${batchAnalysis.total_analyzed || 0} / ${batchAnalysis.total_contacts || 0} 位好友)`}>
+                  <Row gutter={16} style={{ marginBottom: 16 }}>
+                    <Col span={6}>
+                      <Statistic 
+                        title="平均分数" 
+                        value={batchAnalysis.statistics?.average_score || 0} 
+                        precision={2} 
+                      />
+                    </Col>
+                    <Col span={6}>
+                      <Statistic 
+                        title="中位数" 
+                        value={batchAnalysis.statistics?.median_score || 0} 
+                        precision={2} 
+                      />
+                    </Col>
+                    <Col span={6}>
+                      <Statistic 
+                        title="分析成功" 
+                        value={batchAnalysis.total_analyzed || 0} 
+                        suffix={`/ ${batchAnalysis.total_contacts || 0}`} 
+                      />
+                    </Col>
+                    <Col span={6}>
+                      <Statistic 
+                        title="分析失败" 
+                        value={batchAnalysis.failed_count || 0} 
+                      />
+                    </Col>
+                  </Row>
+                  
+                  <Table
+                    dataSource={batchAnalysis.top_friends || []}
+                    rowKey="user_name"
+                    pagination={{ pageSize: 20 }}
+                    columns={[
+                      {
+                        title: '排名',
+                        key: 'rank',
+                        render: (_, __, index) => index + 1,
+                        width: 80,
+                        fixed: 'left'
+                      },
+                      {
+                        title: '好友',
+                        dataIndex: 'display_name',
+                        key: 'display_name',
+                        ellipsis: true,
+                        render: (text) => text || '未知'
+                      },
+                      {
+                        title: '关系评分',
+                        dataIndex: 'score',
+                        key: 'score',
+                        sorter: (a, b) => a.score - b.score,
+                        render: score => (
+                          <span>
+                            <Progress
+                              percent={score * 10}
+                              size="small"
+                              format={() => score.toFixed(2)}
+                              strokeColor={getScoreLevel(score).color}
+                              style={{ width: 150 }}
+                            />
+                            <Tag color={getScoreLevel(score).color} style={{ marginLeft: 8 }}>
+                              {getScoreLevel(score).level}
+                            </Tag>
+                          </span>
+                        )
+                      },
+                      {
+                        title: '状态',
+                        dataIndex: 'relationship_status',
+                        key: 'relationship_status',
+                        render: (status) => (
+                          <Tag color={getStatusColor(status)}>
+                            {status || '未知'}
+                          </Tag>
+                        )
+                      },
+                      {
+                        title: '消息数',
+                        dataIndex: 'message_count',
+                        key: 'message_count',
+                        sorter: (a, b) => a.message_count - b.message_count,
+                        render: (count) => count || 0
+                      },
+                      {
+                        title: '聊天天数',
+                        dataIndex: 'days',
+                        key: 'days',
+                        sorter: (a, b) => (a.days || 0) - (b.days || 0),
+                        render: (days) => days ? `${days}天` : '-'
+                      },
+                      {
+                        title: '最后联系',
+                        dataIndex: 'last_chat',
+                        key: 'last_chat',
+                        sorter: (a, b) => {
+                          const dateA = a.last_chat ? new Date(a.last_chat) : new Date(0);
+                          const dateB = b.last_chat ? new Date(b.last_chat) : new Date(0);
+                          return dateA - dateB;
+                        },
+                        render: (date) => date || '-'
+                      }
+                    ]}
+                  />
+                </Card>
+              </TabPane>
+            </Tabs>
           </>
         )}
       </Content>
