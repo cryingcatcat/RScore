@@ -17,6 +17,26 @@ const API_BASE_URL = 'http://localhost:8000';
 const IS_TEST_MODE = true;  // 测试时设为true，正式使用时设为false
 const BATCH_LIMIT = IS_TEST_MODE ? 30 : 0;  // 0表示全部
 
+// ===== 新增：两个通用图表构造器（只新增，不影响你现有图表函数） =====
+const buildPieOption = (title, data) => ({
+  title: { text: title, left: 'center' },
+  tooltip: { trigger: 'item' },
+  series: [{
+    type: 'pie',
+    radius: ['45%', '70%'],
+    label: { show: true, formatter: '{b}: {d}%' },
+    data
+  }]
+});
+
+const buildBarOption = (title, categories, values, yName = '次数') => ({
+  title: { text: title, left: 'center' },
+  tooltip: { trigger: 'axis' },
+  xAxis: { type: 'category', data: categories },
+  yAxis: { type: 'value', name: yName },
+  series: [{ type: 'bar', data: values }]
+});
+
 function App() {
   const [contacts, setContacts] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
@@ -814,7 +834,7 @@ function App() {
           </div>
         )}
 
-        {/* 评分结果展示 - 保持不变 */}
+        {/* 评分结果展示 - 保持不变，新增两个Tab：互动分析、成就系统 */}
         {scoreData && !loading && (
           <>
             <Row gutter={16} style={{ marginBottom: 24 }}>
@@ -919,6 +939,97 @@ function App() {
                     </Card>
                   </Col>
                 </Row>
+              </TabPane>
+
+              {/* === 新增：互动分析（仅在后端返回 interaction_analysis 时展示） === */}
+              <TabPane tab="互动分析" key="2">
+                {scoreData.interaction_analysis ? (
+                  <>
+                    <Row gutter={16} style={{ marginBottom: 16 }}>
+                      <Col xs={24} md={12}>
+                        <Card title="对话发起者（谁更主动）">
+                          <ReactECharts
+                            style={{ height: 300 }}
+                            option={buildPieOption('发起比例', [
+                              { name: '我发起', value: scoreData.interaction_analysis.initiator.self_sessions },
+                              { name: '对方发起', value: scoreData.interaction_analysis.initiator.friend_sessions }
+                            ])}
+                          />
+                        </Card>
+                      </Col>
+                      <Col xs={24} md={12}>
+                        <Card title="单向 / 双向交流比例">
+                          <ReactECharts
+                            style={{ height: 300 }}
+                            option={buildPieOption('会话方向性', [
+                              { name: '双向', value: scoreData.interaction_analysis.directionality.two_way_sessions },
+                              { name: '单向', value: scoreData.interaction_analysis.directionality.one_way_sessions }
+                            ])}
+                          />
+                        </Card>
+                      </Col>
+                    </Row>
+
+                    <Row gutter={16} style={{ marginBottom: 16 }}>
+                      <Col xs={24} md={12}>
+                        <Card title="回复延迟分布">
+                          <ReactECharts
+                            style={{ height: 300 }}
+                            option={buildBarOption(
+                              '回复延迟分布',
+                              scoreData.interaction_analysis.reply_delay.bins.map(b => b.range),
+                              scoreData.interaction_analysis.reply_delay.bins.map(b => b.count),
+                              '次数'
+                            )}
+                          />
+                          <div style={{ marginTop: 8, color: '#888' }}>
+                            中位数：{Math.round(scoreData.interaction_analysis.reply_delay.median_seconds)} 秒，
+                            P90：{Math.round(scoreData.interaction_analysis.reply_delay.p90_seconds)} 秒
+                          </div>
+                        </Card>
+                      </Col>
+                      <Col xs={24} md={12}>
+                        <Card title="对话长度分布（每会话消息数）">
+                          <ReactECharts
+                            style={{ height: 300 }}
+                            option={buildBarOption(
+                              '会话长度分布',
+                              scoreData.interaction_analysis.conversation_length.bins.map(b => b.range),
+                              scoreData.interaction_analysis.conversation_length.bins.map(b => b.count)
+                            )}
+                          />
+                        </Card>
+                      </Col>
+                    </Row>
+                  </>
+                ) : (
+                  <Alert type="info" message="暂无互动分析数据" />
+                )}
+              </TabPane>
+
+              {/* === 新增：社交成就系统（8 枚） === */}
+              <TabPane tab="成就系统" key="3">
+                {scoreData.achievements ? (
+                  <Card title="社交成就 🏆">
+                    <Row gutter={[12, 12]}>
+                      {scoreData.achievements.map(a => (
+                        <Col span={6} key={a.key}>
+                          <Card size="small" bordered style={{ textAlign: 'center', height: 160 }}>
+                            <div style={{ fontWeight: 600 }}>
+                              {a.achieved ? '🏅 ' : '🎯 '} {a.name}
+                            </div>
+                            <div style={{ marginTop: 8, fontSize: 12, color: '#666' }}>{a.description}</div>
+                            <div style={{ marginTop: 8 }}>
+                              <Progress percent={Math.round((a.progress || 0) * 100)} status={a.achieved ? 'success' : 'active'} />
+                            </div>
+                          </Card>
+                        </Col>
+                      ))}
+                    </Row>
+                  </Card>
+                ) : (
+                  <Alert type="info" message="暂无成就数据" />
+                )}
               </TabPane>
             </Tabs>
           </>
